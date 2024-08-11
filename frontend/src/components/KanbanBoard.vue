@@ -1,53 +1,62 @@
 <template>
-  <div class="flex justify-around p-5 bg-gray-100 min-h-screen">
+  <div class="flex flex-grow px-10 mt-4 space-x-6 overflow-auto">
     <KanbanColumn
-      v-for="status in columnStatuses"
-      :key="status"
-      :status="status"
-      :cards="getCardsByStatus(status)"
+      v-for="stage in stages"
+      :key="stage.id"
+      :stage="stage"
+      :contacts="getCardsByStatus(stage.id)"
       @move-card="onMoveCard"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-  import type { Card, TupleOf, ColumnStatus } from "../utils/types";
-  import { ref, computed, type ComputedRef } from "vue";
+  import { ref, computed, type ComputedRef, onMounted } from "vue";
   import KanbanColumn from "./KanbanColumn.vue";
+  import type { StagesResponse, stageSchema } from "../utils/types/stage";
+  import type { ContactResponse, contactSchema } from "../utils/types/contact";
+  import type { z } from "zod";
 
-  type GetCardsByStatusFn = (status: ColumnStatus) => Card[];
+  const fetchData = async () => {
+    try {
+      const [stagesResponse, contactsResponse] = await Promise.all([
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/stages`),
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/contacts`),
+      ]);
 
-  type CardMoveEvent = (cardId: string, newStatus: ColumnStatus) => void;
+      const stagesData: StagesResponse = await stagesResponse.json();
+      const contactsData: ContactResponse = await contactsResponse.json();
 
-  const cards = ref<Card[]>([
-    { id: "1", title: "Task 1", status: "New" },
-    { id: "2", title: "Task 7", status: "" },
-    { id: "3", title: "Task 3", status: "New" },
-    { id: "4", title: "Task 4", status: "New" },
-    { id: "5", title: "Task 5", status: "New" },
-    // Add more cards with various statuses
-  ]);
+      stages.value = stagesData.results;
+      contacts.value = contactsData.results;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
 
-  const columnStatuses: TupleOf<ColumnStatus, 4> = [
-    "New",
-    "To Do",
-    "In Progress",
-    "Done",
-  ];
+  type GetCardsByStatusFn = (
+    stageId: string
+  ) => z.infer<typeof contactSchema>[];
+
+  type CardMoveEvent = (cardId: string, newStageId: string) => void;
+
+  const stages = ref<z.infer<typeof stageSchema>[]>([]);
+  const contacts = ref<z.infer<typeof contactSchema>[]>([]);
+
+  onMounted(async () => {
+    await fetchData();
+  });
 
   const getCardsByStatus: ComputedRef<GetCardsByStatusFn> = computed(
-    () => (status: ColumnStatus) => {
-      return cards.value.filter((card) => card.status === status);
+    () => (stageId: string) => {
+      return contacts.value.filter((contact) => contact.stage === stageId);
     }
   );
 
-  const onMoveCard: CardMoveEvent = (
-    cardId: string,
-    newStatus: ColumnStatus
-  ) => {
-    const card = cards.value.find((card) => card.id === cardId);
+  const onMoveCard: CardMoveEvent = (cardId: string, newStageId: string) => {
+    const card = contacts.value.find((contact) => contact.id === cardId);
     if (card) {
-      card.status = newStatus;
+      card.stage = newStageId;
     }
   };
 </script>
